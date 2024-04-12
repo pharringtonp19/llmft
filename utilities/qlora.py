@@ -1,6 +1,7 @@
 from peft import LoraConfig, get_peft_model 
 from transformers import BitsAndBytesConfig
 
+# ----- QUANTIZATION -------# 
 # Activate 4-bit precision base model loading
 use_4bit = True
 
@@ -18,11 +19,7 @@ compute_dtype = getattr(torch, bnb_4bit_compute_dtype)
 
 # Enable fp16/bf16 training (set bf16 to True with an A100)
 fp16 = False
-bf16 = False
-
-# Load tokenizer and model with QLoRA configuration
-compute_dtype = getattr(torch, bnb_4bit_compute_dtype)
-print(compute_dtype)
+bf16 = True
 
 bnb_config = BitsAndBytesConfig(
     load_in_4bit=use_4bit,
@@ -38,6 +35,8 @@ if compute_dtype == torch.float16 and use_4bit:
         print("=" * 80)
         print("Your GPU supports bfloat16: accelerate training with bf16=True")
         print("=" * 80)
+
+# ----- LORA -------# 
 
 peft_config = LoraConfig(
     r=32,
