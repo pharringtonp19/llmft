@@ -4,3 +4,7 @@ def get_special_tokens(tokenizer):
     pad = [tokenizer.pad_token, tokenizer.pad_token_id]
     bos = [tokenizer.bos_token, tokenizer.bos_token_id]
     print(cls, sep, pad, bos)
+
+def get_decoding(tokenizer, model_inputs):
+    return tokenizer.batch_decode(model_inputs.input_ids)
+    
