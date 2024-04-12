@@ -10,3 +10,7 @@ def formatting_prompts_func(example):
 
     # Return the list of formatted texts
     return formatted_texts
+
+response_template_with_context = "\n\n    Answer:"  # We added context here: "\n". This is enough for this tokenizer
+response_template_ids = tokenizer.encode(response_template_with_context, add_special_tokens=False) # Now we have it like in the dataset texts: `[2277, 29937, 4007, 22137, 29901]`
+data_collator = DataCollatorForCompletionOnlyLM(response_template_ids, tokenizer=tokenizer)
