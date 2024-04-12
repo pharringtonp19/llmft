@@ -38,12 +38,8 @@ if compute_dtype == torch.float16 and use_4bit:
 
 # ----- LORA -------# 
 
-peft_config = LoraConfig(
-    r=32,
-    lora_alpha=64,
-    lora_dropout=0.05,
-    bias="none",
+lora_config = LoraConfig(
+    r=8,
+    target_modules=["q_proj", "o_proj", "k_proj", "v_proj", "gate_proj", "up_proj", "down_proj"],
     task_type="CAUSAL_LM",
-    target_modules= ["Wqkv", "out_proj", "fc1", "fc2" ] # ["Wqkv", "out_proj", "fc1", "fc2" ], - 41M params
-    # modules_to_save=["embed_tokens","lm_head"] 
 )
