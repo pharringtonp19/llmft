@@ -1,7 +1,11 @@
 Connect to remote computer
-  - Run this command from the command line and inside your vscode editor
 ```
 ssh -i ~/.ssh/`key'.pem ubuntu@12345678910
+```
+
+Clone Repository
+```
+git clone https://github.com/pharringtonp19/llmft.git
 ```
 
 Download script
