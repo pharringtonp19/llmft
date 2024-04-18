@@ -16,6 +16,6 @@ source $ENV_NAME/bin/activate
 pip3 install torch torchvision torchaudio
 pip install transformers datasets accelerate peft bitsandbytes ipywidgets evaluate huggingface_hub 
 pip install matplotlib scikit-learn
-pip install openai tiktoken
+pip install openai tiktoken trl
 
 echo "Setup complete and the virtual environment $ENV_NAME is ready to use."
