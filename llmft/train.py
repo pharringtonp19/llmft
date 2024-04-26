@@ -19,73 +19,92 @@ class EarlyStopping:
         self.patience = patience
         self.verbose = verbose
         self.counter = 0
-        self.best_score = None
-        self.early_stop = False
         self.val_loss_min = float('inf')
+        self.early_stop = False
         self.delta = delta
         self.path = path
         self.trace_func = trace_func
+        self.best_epoch = 0  # Attribute to track the epoch number of the best validation loss
 
-    def __call__(self, val_loss, model):
-        score = -val_loss
-
-        if self.best_score is None:
-            self.best_score = score
-            self.save_checkpoint(val_loss, model)
-        elif score < self.best_score + self.delta:
+    def __call__(self, val_loss, model, epoch):
+        if self.val_loss_min == float('inf') or val_loss < self.val_loss_min - self.delta:
+            if val_loss < self.val_loss_min:
+                self.val_loss_min = val_loss
+                self.save_checkpoint(val_loss, model)
+                self.best_epoch = epoch  # Update the best epoch
+                self.counter = 0
+            if self.verbose:
+                self.trace_func(f'Validation loss improved ({self.val_loss_min:.6f}). Saving model...')
+        else:
             self.counter += 1
             self.trace_func(f'EarlyStopping counter: {self.counter} out of {self.patience}')
             if self.counter >= self.patience:
                 self.early_stop = True
-        else:
-            self.best_score = score
-            self.save_checkpoint(val_loss, model)
-            self.counter = 0
 
     def save_checkpoint(self, val_loss, model):
-        """Saves model when validation loss decrease."""
-        if self.verbose:
-            self.trace_func(f'Validation loss decreased ({self.val_loss_min:.6f} --> {val_loss:.6f}).  Saving model ...')
+        """Saves model when validation loss decreases."""
         torch.save(model.state_dict(), self.path)
-        self.val_loss_min = val_loss
 
-def predict(model, data_loader, device):
-    model.eval()  # Set the model to evaluation mode.
-    predictions = []
-    with torch.no_grad():  # No gradients needed for predictions.
-        for batch in data_loader:
-            # Assuming your batch only includes input data and not labels.
-            batch = {k: v.to(device) for k, v in batch.items() if v.dtype in [torch.float32, torch.int64]}  # Move to device
 
-            outputs = model(**batch).logits  # Get model outputs
-            probs = torch.nn.functional.softmax(outputs, dim=1)[:,1]
-            predictions.extend(probs.cpu().numpy())
-
-    return np.array(predictions)
-
-def evaluate_model(model, data_loader, device):
+def evaluate_model(model, data_loader, criterion, device):
     model.eval()
     total_loss = 0
     with torch.no_grad():
         for batch in data_loader:
-            batch = {k: v.to(device) for k, v in batch.items()}
-            outputs = model(**batch)
-            loss = outputs.loss
+            input_ids, attention_mask, labels = batch['input_ids'].to(device), batch['attention_mask'].to(device), batch['labels'].to(device)
+            outputs = model(input_ids, attention_mask)
+            logits = outputs.logits  # Extract logits from the model output
+            # Handling for the type_indicator based on the mode
+            
+            if criterion.mode == 'input':
+                type_indicator = batch['type_indicator'].to(device)   
+                loss = criterion(logits, labels, type_indicator)
+            else:
+                type_indicator = None
+                loss = criterion(logits, labels)
             total_loss += loss.item()
     return total_loss / len(data_loader)
 
-def train_one_epoch(model, train_loader, optimizer, scheduler, criterion, device):
+def train_one_epoch(model, train_loader, optimizer, scheduler, metric, criterion, device):
     model.train()
     total_loss = 0
+    all_predictions = []
+    all_labels = []
+
     for batch in train_loader:
-        input_ids, attention_mask, labels = batch['input_ids'].to(device),  batch['attention_mask'].to(device), batch['labels'].to(device)
         optimizer.zero_grad()
+        input_ids, attention_mask, labels = batch['input_ids'].to(device), batch['attention_mask'].to(device), batch['labels'].to(device)
         outputs = model(input_ids, attention_mask)
         logits = outputs.logits  # Extract logits from the model output
-        loss = criterion(logits, labels)
+        
+        # Handling for the type_indicator based on the mode
+        if criterion.mode == 'input':
+            type_indicator = batch['type_indicator'].to(device)  # Ensure your dataloader provides this if needed
+            loss = criterion(logits, labels, type_indicator)
+        else:
+            loss = criterion(logits, labels)
+
         loss.backward()
         optimizer.step()
         scheduler.step()
+        
         total_loss += loss.item()
+
+        # Accumulate all predictions and labels for F1 score calculation
+        predictions = torch.argmax(logits, dim=1)  # Convert logits to predicted class indices
+        all_predictions.append(predictions)
+        all_labels.append(labels)
+
+    # Concatenate all predictions and labels across batches
+    all_predictions = torch.cat(all_predictions)
+    all_labels = torch.cat(all_labels)
+
+    # Compute the weighted F1 score
+    metric_output = metric(all_predictions, all_labels)
+
     average_loss = total_loss / len(train_loader)
-    return average_loss
+
+    return average_loss, metric_output, scheduler.get_last_lr()[0]  # Assuming you have only one parameter group
+
+
+
