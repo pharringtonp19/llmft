@@ -14,7 +14,7 @@ source $ENV_NAME/bin/activate
 
 # Install any necessary Python packages
 pip3 install torch torchvision torchaudio
-pip install transformers datasets accelerate peft bitsandbytes ipywidgets evaluate huggingface_hub nvidia-ml-py3
+pip install transformers datasets accelerate peft bitsandbytes ipywidgets evaluate huggingface_hub nvidia-ml-py3 pytest
 pip install matplotlib scikit-learn
 pip install openai tiktoken trl
 
