@@ -1,5 +1,6 @@
 import torch 
 import numpy as np 
+from dataclasses import dataclass
 
 class EarlyStopping:
     def __init__(self, patience=5, verbose=False, delta=0, path='checkpoint.pt', trace_func=print):
@@ -65,7 +66,7 @@ def evaluate_model(model, data_loader, criterion, device):
             total_loss += loss.item()
     return total_loss / len(data_loader)
 
-def train_one_epoch(model, train_loader, optimizer, scheduler, metric, criterion, device):
+def train_encoder(model, train_loader, optimizer, scheduler, metric, criterion, device):
     model.train()
     total_loss = 0
     all_predictions = []
@@ -74,8 +75,7 @@ def train_one_epoch(model, train_loader, optimizer, scheduler, metric, criterion
     for batch in train_loader:
         optimizer.zero_grad()
         input_ids, attention_mask, labels = batch['input_ids'].to(device), batch['attention_mask'].to(device), batch['labels'].to(device)
-        outputs = model(input_ids, attention_mask)
-        logits = outputs.logits  # Extract logits from the model output
+        logits = model(input_ids, attention_mask).logits
         
         # Handling for the type_indicator based on the mode
         if criterion.mode == 'input':
@@ -105,6 +105,52 @@ def train_one_epoch(model, train_loader, optimizer, scheduler, metric, criterion
     average_loss = total_loss / len(train_loader)
 
     return average_loss, metric_output, scheduler.get_last_lr()[0]  # Assuming you have only one parameter group
+
+
+@dataclass
+class ModelTrainer:
+    model: torch.nn.Module
+    train_loader: torch.utils.data.DataLoader
+    optimizer: torch.optim.Optimizer
+    scheduler: torch.optim.lr_scheduler
+    metric: any  # Define the type based on your implementation
+    criterion: torch.nn.Module
+    device: torch.device
+    verbose: bool = True  # Default to True, can be set to False when creating an instance
+
+    def train_decoder(self):
+        self.model.train()
+        total_loss = 0
+
+        accumulation_steps = 8  # Adjust based on memory capacity and desired effective batch size
+        self.optimizer.zero_grad()
+        for i, batch in enumerate(self.train_loader):
+            input_ids = batch['input_ids'].to(self.device)
+            labels = input_ids[:, 1:].clone().detach()
+            input_ids = input_ids[:, :-1]
+
+            attention_mask = batch['attention_mask'].to(self.device)
+            attention_mask = attention_mask[:, :-1]
+
+            logits = self.model(input_ids, attention_mask).loss['logits']
+            mask = labels != -100
+            loss = self.criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
+            loss = (loss * mask.view(-1)).sum() / mask.sum()
+
+            loss = loss / accumulation_steps  # Normalize loss to account for accumulation
+            loss.backward()
+            total_loss += loss.item()
+            if (i + 1) % accumulation_steps == 0:  # Perform optimization step after 'accumulation_steps' batches
+                self.optimizer.step()
+                self.scheduler.step()
+                self.optimizer.zero_grad()
+                if self.verbose:
+                    print(f"Batch Loss: {loss.item()}")
+                torch.cuda.empty_cache()
+
+        average_loss = total_loss / len(self.train_loader)
+
+        return average_loss
 
 
 
