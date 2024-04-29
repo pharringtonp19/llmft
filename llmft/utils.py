@@ -18,18 +18,21 @@ def predict(model, data_loader, device):
     return np.array(predictions), np.array(targets)
 
 
-def log_predictions(model, tokenizer, device, dataset, file_name):
+def log_predictions(model, tokenizer, device, epoch, dataset, file_name):
     # Open the file for appending text
     with open(file_name, 'a') as f:
         # Iterate through each message in the dataset
+        f.write(f"Epoch: {epoch}" + '\n')
         for i in dataset["messages"]:
             x = i[:2]
             # Prepare the inputs for the model
             inputs =  tokenizer.apply_chat_template(x, add_generation_prompt=True, return_tensors='pt').to(device)
             # Generate outputs from the model
-            outputs =  model.generate(inputs, max_new_tokens=10)
+            outputs =  model.generate(inputs, max_new_tokens=25)
             # Decode the generated outputs to text
             text = tokenizer.batch_decode(outputs)[0].split('<|assistant|>')[1]
+            # Ignore new lines
+            text = text.replace('\n', '')
             # Write the generated text to the file
             f.write(text + '\n')
         

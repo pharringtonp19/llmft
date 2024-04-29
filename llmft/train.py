@@ -8,6 +8,16 @@ def no_op(*args, **kwargs):
 # Example usage in your code
 trace_func = no_op
 
+def lambda1(warmup_ratio, epoch):
+    warmup_epochs = int(warmup_ratio*epoch)
+    if epoch < warmup_epochs:
+        if epoch == 0:
+            return float(1) / warmup_epochs
+        else: 
+            float(epoch) / warmup_epochs
+    else:
+        return 0.95 ** (epoch - warmup_epochs)
+
 @dataclass
 class EarlyStopping:
     patience: int = 5
@@ -84,23 +94,18 @@ class EncoderTrainer:
                                              batch['attention_mask'].to(self.device), 
                                              batch['labels'].to(self.device))
         logits = self.model(input_ids, attention_mask).logits
-        loss = self.calculate_loss(logits, labels, batch)
-
+        if self.criterion.mode == 'input' and 'type_indicator' in batch:
+            type_indicator = batch['type_indicator'].to(self.device)
+            loss = self.criterion(logits, labels, type_indicator)
+        else:
+            loss = self.criterion(logits, labels)
         if train:
             self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
             self.scheduler.step()
-
         predictions = torch.argmax(logits, dim=1) if train else None
         return loss, predictions, labels
-
-    def calculate_loss(self, logits, labels, batch):
-        """Calculate loss based on the criterion and mode."""
-        if self.criterion.mode == 'input' and 'type_indicator' in batch:
-            type_indicator = batch['type_indicator'].to(self.device)
-            return self.criterion(logits, labels, type_indicator)
-        return self.criterion(logits, labels)
 
     def finalize_epoch(self, total_loss, all_predictions, all_labels, num_batches):
         """Finalize epoch, calculate metrics and average loss."""
@@ -110,7 +115,7 @@ class EncoderTrainer:
         average_loss = total_loss / num_batches
         if self.verbose:
             print(f'Epoch finished. Average Loss: {average_loss:.4f}, Metric: {metric_output}')
-        return average_loss, metric_output, self.scheduler.get_last_lr()[0]  # Assuming one parameter group
+        return average_loss, metric_output, self.scheduler.get_last_lr()[0]  
 
 @dataclass
 class DecoderTrainer:
@@ -130,7 +135,20 @@ class DecoderTrainer:
         logits = self.model(input_ids, attention_mask).logits
         labels = input_ids[:, -self.threshold:].contiguous()
         logits = logits[:, -self.threshold-1:-1, :].contiguous()
-        loss = self.criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
+        if self.criterion.mode == 'input' and 'type_indicator' in batch:
+            # Ensure type_indicator is adjusted to match the size of logits/labels if it includes multiple predictions per example
+            # Assuming type_indicator needs to be repeated for each token in the threshold window
+            type_indicator = batch['type_indicator'].to(self.device)
+            
+            # Repeat type_indicator to match the number of predictions (this depends on how your model and criterion are designed)
+            type_indicator = type_indicator.repeat_interleave(self.threshold)
+            
+            # Compute loss with type_indicator
+            loss = self.criterion(logits.view(-1, logits.size(-1)), labels.view(-1), type_indicator)
+        else:
+            # Compute loss without type_indicator
+            loss = self.criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
+        
         return loss
 
 

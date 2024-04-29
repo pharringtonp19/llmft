@@ -638,17 +638,17 @@ def generate_dataset(total_entries:int=500, percent_rtc_effective:float=0.3, per
                'label': []}
     for _ in range(leases_violations_count):
         scenario = random.choice(leases_violations_scenarios)
-        dataset['text'].append("Yes, the Right to Counsel is in effect in the tenant's zip code. " + scenario)
+        dataset['text'].append("The Right to Counsel is in effect in the tenant's zip code. " + scenario)
         dataset['label'].append(0)
 
     for _ in range(other_issues_count):
         scenario = random.choice(other_scenarios)
-        dataset['text'].append("Yes, the Right to Counsel is in effect in the tenant's zip code. " + scenario)
+        dataset['text'].append("The Right to Counsel is in effect in the tenant's zip code. " + scenario)
         dataset['label'].append(1)
     
     for _ in range(rtc_not_effective_count):
         scenario = random.choice(other_scenarios + leases_violations_scenarios)
-        dataset['text'].append("No, the Right to Counsel is not in effect in the tenant's zip code. " + scenario)
+        dataset['text'].append("The Right to Counsel is not in effect in the tenant's zip code. " + scenario)
         dataset['label'].append(0)
 
     if flip_rate > 0:
