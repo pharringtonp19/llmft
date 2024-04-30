@@ -35,4 +35,17 @@ def log_predictions(model, tokenizer, device, epoch, dataset, file_name):
             text = text.replace('\n', '')
             # Write the generated text to the file
             f.write(text + '\n')
+
+def calculate_fraction(self, yes_status, type_indicators, target_type, search_for):
+    indices = [i for i, x in enumerate(type_indicators) if x == target_type]
+    if indices:
+        if search_for == "Yes":
+            relevant_status = [yes_status[i] for i in indices]
+        else:  # Assume "No"
+            relevant_status = [not yes_status[i] for i in indices]
+        fraction = sum(relevant_status) / len(relevant_status)
+    else:
+        fraction = None  # No samples of this type_indicator
+    return fraction
+
         

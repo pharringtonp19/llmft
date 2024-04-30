@@ -1,6 +1,8 @@
 import torch 
 import numpy as np 
 from dataclasses import dataclass, field
+from transformers import PreTrainedTokenizerBase
+
 
 def no_op(*args, **kwargs):
     pass
@@ -8,15 +10,6 @@ def no_op(*args, **kwargs):
 # Example usage in your code
 trace_func = no_op
 
-def lambda1(warmup_ratio, epoch):
-    warmup_epochs = int(warmup_ratio*epoch)
-    if epoch < warmup_epochs:
-        if epoch == 0:
-            return float(1) / warmup_epochs
-        else: 
-            float(epoch) / warmup_epochs
-    else:
-        return 0.95 ** (epoch - warmup_epochs)
 
 @dataclass
 class EarlyStopping:
@@ -120,6 +113,7 @@ class EncoderTrainer:
 @dataclass
 class DecoderTrainer:
     model: torch.nn.Module
+    tokenizer: PreTrainedTokenizerBase
     optimizer: torch.optim.Optimizer
     scheduler: torch.optim.lr_scheduler
     criterion: torch.nn.Module
@@ -150,6 +144,27 @@ class DecoderTrainer:
             loss = self.criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
         
         return loss
+    
+
+    def batch_generate_text(self, batch):
+        """Process a single batch of data, focusing only on generating text from the final token."""
+        input_ids = batch['input_ids'].to(self.device)
+        attention_mask = batch['attention_mask'].to(self.device)
+
+        # Get logits from the model
+        logits = self.model(input_ids, attention_mask).logits
+
+        # Get the last logits for generating text (last token predictions)
+        last_logits = logits[:, self.threshold, :]
+
+        # Convert logits to predicted token IDs using argmax
+        predicted_token_ids = torch.argmax(last_logits, dim=-1)
+
+        # Decode the predicted token IDs to text
+        decoded_texts = self.tokenizer.batch_decode(predicted_token_ids, skip_special_tokens=True)
+
+        # You can return the decoded texts directly or further process them as needed
+        return decoded_texts, batch['type_indicator']
 
 
     def train(self, data_loader):
@@ -189,7 +204,57 @@ class DecoderTrainer:
                 total_loss += loss * len(batch)
 
         return total_loss / total_samples
+    
+    def batch_generate_text(self, batch):
+        """Process a single batch of data, focusing only on generating text from the final token."""
+        input_ids = batch['input_ids'].to(self.device)
+        attention_mask = batch['attention_mask'].to(self.device)
 
+        # Get logits from the model
+        logits = self.model(input_ids, attention_mask).logits
+
+        # Get the last logits for generating text (last token predictions)
+        last_logits = logits[:, -self.threshold:, :]
+
+        # Convert logits to predicted token IDs using argmax
+        predicted_token_ids = torch.argmax(last_logits, dim=-1)
+
+        # Decode the predicted token IDs to text
+        decoded_texts = self.tokenizer.batch_decode(predicted_token_ids, skip_special_tokens=True)
+
+        # You can return the decoded texts directly or further process them as needed
+        return decoded_texts, batch['type_indicator']
+    
+    def compute_recall(self, data_loader):
+        self.model.eval()
+        all_yes_status = []
+        all_type_indicators = []
+
+        with torch.no_grad():
+            for batch in data_loader:
+                sentences, type_indicators = self.batch_generate_text(batch)
+                batch_yes_status = ["Yes" in sentence for sentence in sentences]
+                all_yes_status.extend(batch_yes_status)
+                all_type_indicators.extend(type_indicators.cpu().numpy())  # Assuming type_indicator is a tensor
+
+        # Calculate metrics for each type indicator
+        type_0_no_fraction = self.calculate_fraction(all_yes_status, all_type_indicators, target_type=0, search_for="No")
+        type_1_yes_fraction = self.calculate_fraction(all_yes_status, all_type_indicators, target_type=1, search_for="Yes")
+
+        return [type_0_no_fraction, type_1_yes_fraction]
+    
+    @staticmethod
+    def calculate_fraction(yes_status, type_indicators, target_type, search_for):
+        indices = [i for i, x in enumerate(type_indicators) if x == target_type]
+        if indices:
+            if search_for == "Yes":
+                relevant_status = [yes_status[i] for i in indices]
+            else:  # Assume "No"
+                relevant_status = [not yes_status[i] for i in indices]
+            fraction = sum(relevant_status) / len(relevant_status)
+        else:
+            fraction = None  # No samples of this type_indicator
+        return fraction
 
 
 
