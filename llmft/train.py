@@ -188,8 +188,6 @@ class DecoderTrainer:
                     print(f"Batch {i+1} Loss: {loss.item() * self.gradient_accumulation}")
                 torch.cuda.empty_cache()
 
-
-
         return total_loss / total_samples
 
     def evaluate(self, data_loader):
