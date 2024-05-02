@@ -1,6 +1,20 @@
 repos:
+  - repo: https://github.com/kynan/nbstripout
+    rev: '0.5.0'  # Use the latest revision
+    hooks:
+      - id: nbstripout
+
   - repo: local
     hooks:
+      - id: isort
+        name: isort (Python imports)
+        entry: isort
+        language: system
+        types: [python]
+        files: \.ipynb$
+        args: ['--treat-comment-as-code', '# %%', '--float-to-top']
+        require_serial: true
+
       - id: pytest
         name: Run pytest
         entry: pytest
