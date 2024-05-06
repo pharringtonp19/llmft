@@ -22,3 +22,18 @@ Run script
 ```
 ./setup_env.sh
 ```
+
+Open directory
+```
+cd llmft
+```
+
+Activate Virtual Environment
+```
+source llms/bin/activate
+```
+
+Install Library in editable mode
+```
+pip install -e .
+```
