@@ -18,5 +18,6 @@ pip install transformers datasets accelerate peft bitsandbytes ipywidgets evalua
 pip install matplotlib scikit-learn pytest pre-commit torchtune
 pip install openai tiktoken trl ipykernel anthropic PyPDF2 seaborn
 pip install git+https://github.com/pharringtonp19/trics.git
+pip install -U "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 
 echo "Setup complete and the virtual environment $ENV_NAME is ready to use."
