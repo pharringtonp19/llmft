@@ -37,3 +37,18 @@ Install Library in editable mode
 ```
 pip install -e .
 ```
+
+Open directory
+```
+cd llmft
+```
+
+Activate Virtual Environment
+```
+source llms/bin/activate
+```
+
+Install Library in editable mode
+```
+pip install -e .
+```
