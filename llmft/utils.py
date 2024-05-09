@@ -12,7 +12,8 @@ def predict(model, data_loader, device):
             input_ids, attention_mask = batch['input_ids'].to(device), batch['attention_mask'].to(device)
             outputs = model(input_ids, attention_mask).logits  # Get model outputs
             probs = torch.nn.functional.softmax(outputs, dim=1)[:,1]
-            predictions.extend(probs.cpu().numpy())
+            probs_float32 = probs.to(torch.float32)  # Convert to float32 before calling .numpy()
+            predictions.extend(probs_float32.cpu().numpy())
             targets.extend(labels)
 
     return np.array(predictions), np.array(targets)
