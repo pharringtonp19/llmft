@@ -1,31 +1,11 @@
 # llmft
 
+### **Purpose**
+Producing causal effects by fine-tuning Large Language Models on text data. 
 
+### **Example**
+In the [Right to Counsel at Scale](https://github.com/pharringtonp19/papers/blob/main/The_Right_to_Counsel_at_Scale_latest.pdf), we estimate the impact of legal representation (for those facing eviction) on housing court outcomes and housing stability more importantly. We do so via an instrumental variable approach where the instrument is whether free legal representation is available in the tenant's zip code. 
 
-```python 
+$$y_i = \beta(\big(\mathbb{E}[D_i \vert X_i, Z_i] - \mathbb{E}[D_i \vert X_i]\big)$$
 
-probs = F.softmax(outputs.loss['logits'][2].cpu() , dim=-1).detach().numpy()
-from matplotlib.colors import Normalize
-
-# Desired colorbar maximum (k)
-k = .01
-
-# Visualize probabilities for the first 10 tokens at all sequence positions
-plt.figure(figsize=(10, 8))
-# Use Normalize to set the color scale from 0 to k
-norm = Normalize(vmin=0, vmax=k)
-cmap = plt.get_cmap('viridis')  # You can choose any colormap that fits your needs
-
-# Create the heatmap with normalization
-cax = plt.imshow(probs, aspect='auto', cmap=cmap, norm=norm)
-
-# Create a colorbar with the correct scaling
-cbar = plt.colorbar(cax)  # Ensure ticks cover the range from 0 to k
-cbar.set_label('Probability Scale')
-
-plt.title('Probability Distribution Over First 10 Tokens in the Sequence')
-plt.xlabel('Token Index')
-plt.ylabel('Sequence Position')
-plt.show()
-
-```
+We estimate the conditional expectation functions via fine-tuned LLMs where $X_i$ is the landlord's complaint against the tenant.
