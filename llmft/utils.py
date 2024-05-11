@@ -5,18 +5,39 @@ def predict(model, data_loader, device):
     model.eval()  # Set the model to evaluation mode.
     predictions = []
     targets = []
+    val_indicators = []  # List to collect val_indicator if it exists
+
     with torch.no_grad():  # No gradients needed for predictions.
         for batch in data_loader:
+            # Extract labels
             labels = batch['labels']
-            # Assuming your batch only includes input data and not labels.
-            input_ids, attention_mask = batch['input_ids'].to(device), batch['attention_mask'].to(device)
-            outputs = model(input_ids, attention_mask).logits  # Get model outputs
-            probs = torch.nn.functional.softmax(outputs, dim=1)[:,1]
-            probs_float32 = probs.to(torch.float32)  # Convert to float32 before calling .numpy()
+            # Extract inputs and move them to the specified device
+            input_ids = batch['input_ids'].to(device)
+            attention_mask = batch['attention_mask'].to(device)
+
+            # Perform prediction
+            outputs = model(input_ids, attention_mask).logits
+            probs = torch.nn.functional.softmax(outputs, dim=1)[:, 1]  # Get probabilities for the second class
+            probs_float32 = probs.to(torch.float32)  # Ensure precision
+
+            # Collect outputs
             predictions.extend(probs_float32.cpu().numpy())
             targets.extend(labels)
 
-    return np.array(predictions), np.array(targets)
+            # Check if 'val_indicator' exists in the batch and collect it
+            if 'val_indicator' in batch:
+                val_indicators.extend(batch['val_indicator'])
+
+    # Convert lists to numpy arrays
+    predictions = np.array(predictions)
+    targets = np.array(targets)
+
+    # Return val_indicators only if they were collected
+    if val_indicators:
+        val_indicators = np.array(val_indicators)
+        return predictions, targets, val_indicators
+    else:
+        return predictions, targets
 
 
 def log_predictions(model, tokenizer, device, epoch, dataset, file_name):
