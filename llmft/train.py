@@ -87,7 +87,8 @@ class EncoderTrainer:
                                              batch['attention_mask'].to(self.device), 
                                              batch['labels'].to(self.device))
         logits = self.model(input_ids, attention_mask).logits
-        if self.criterion.mode == 'input' and 'type_indicator' in batch:
+        criterion_mode = getattr(self.criterion, 'mode', None)  # Defaulting to None or another appropriate default
+        if criterion_mode == 'input' and 'type_indicator' in batch:
             type_indicator = batch['type_indicator'].to(self.device)
             loss = self.criterion(logits, labels, type_indicator)
         else:
@@ -129,7 +130,8 @@ class DecoderTrainer:
         logits = self.model(input_ids, attention_mask).logits
         labels = input_ids[:, -self.threshold:].contiguous()
         logits = logits[:, -self.threshold-1:-1, :].contiguous()
-        if self.criterion.mode == 'input' and 'type_indicator' in batch:
+        criterion_mode = getattr(self.criterion, 'mode', None)  # Defaulting to None or another appropriate default
+        if criterion_mode == 'input' and 'type_indicator' in batch:
             # Ensure type_indicator is adjusted to match the size of logits/labels if it includes multiple predictions per example
             # Assuming type_indicator needs to be repeated for each token in the threshold window
             type_indicator = batch['type_indicator'].to(self.device)
