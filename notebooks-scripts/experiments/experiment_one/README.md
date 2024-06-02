@@ -5,7 +5,7 @@ These notebooks hightlight that language models can exploit information in the t
  1. We generate synthetic observations by drawing features $x = [x_1, x_2, x_3, x_4, x_5, x_6, x_7, x_8]$
  2. Using an [anthropic model](https://www.anthropic.com/api), and the following prompt, we map $x$ into text, $t^*(x)$. This gives us a set of numerical control vectors
     which we can pass as inputs to linear and feed-forward models as well as a collection text that we can pass as inputs to the language model. 
-  ```python
+  ```
     Task: Write a paragraph description of a tenant in their {age_group} who is currently {overdue_phrase} ${x[3]:.0f}. 
     Mention that they are in relatively {health}, live in a {living_situation}, have been living there for {months} months, and have {pets}. 
     Include some details about their {roomate_status} who {contribute_status} to the rent. Also mention somewhere that {additional_detail}
