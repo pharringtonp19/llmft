@@ -2,9 +2,9 @@
 These notebooks hightlight that language models can exploit information in the text which is (A) informative about who is a complier and (B) something that the researcher would not have decided to represent as a numerical control variable.
 
 ### **Setp Up**
- 1. We generate synthetic observations by drawing features $x = [x_0, x_1, x_2, x_3, x_4]$
- 2. Using an [anthropic model](https://www.anthropic.com/api), and the following prompt, we map $x$ into text, $t^*(x)$. This allows us to have numerical features
-    which we can pass as inputs to linear and feed-forward models as well as text that we can pass to to the language model. 
+ 1. We generate synthetic observations by drawing features $x = [x_1, x_2, x_3, x_4, x_5, x_6, x_7, x_8]$
+ 2. Using an [anthropic model](https://www.anthropic.com/api), and the following prompt, we map $x$ into text, $t^*(x)$. This gives us a set of numerical control vectors
+    which we can pass as inputs to linear and feed-forward models as well as a collection text that we can pass as inputs to the language model. 
   ```python
   def get_promptv3(i, x):
   """Generates a prompt for writing a paragraph about a tenant.
