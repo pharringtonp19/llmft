@@ -6,21 +6,6 @@ These notebooks hightlight that language models can exploit information in the t
  2. Using an [anthropic model](https://www.anthropic.com/api), and the following prompt, we map $x$ into text, $t^*(x)$. This gives us a set of numerical control vectors
     which we can pass as inputs to linear and feed-forward models as well as a collection text that we can pass as inputs to the language model. 
   ```python
-  def get_promptv3(i, x):
-    # Add variability
-    age_group = age_groups[x[0]]
-    living_situation = living_situations[x[1]]
-    pets = pets_options[x[2]]
-    health = health_status[x[4]]
-    months = x[5]
-    roomate_status = roomate_statuses[x[6]]
-    contribute_status = contribute_statuses[x[7]]
-
-    # Add some noise with random synonyms or additional details
-    overdue_phrase = random.choice(overdue_phrases)
-    additional_detail = random.choice(additional_details)
-
-    return f"""random seed: {i}
     Task: Write a paragraph description of a tenant in their {age_group} who is currently {overdue_phrase} ${x[3]:.0f}. 
     Mention that they are in relatively {health}, live in a {living_situation}, have been living there for {months} months, and have {pets}. 
     Include some details about their {roomate_status} who {contribute_status} to the rent. Also mention somewhere that {additional_detail}
