@@ -31,7 +31,7 @@ These notebooks hightlight that language models can exploit information in the t
       Description: The tenant is a """
     ```
 4. The instrumental variable is randomly assigned so we don't need to control for any features for identification reasons. 
-5. A key design choice in this simulation is that (A) the first stage depends heavily on both $the type of disability $(x_4)$ and housing voucher status $(x_8)$ and (B) the research knows (from conversations with legal aid lawyers) that tenants with vouchers and disabilities were often prioritized over other tenants.
+5. A key design choice in this simulation is that (A) the first stage depends heavily on both the type of disability $(x_4)$ and housing voucher status $(x_8)$ and (B) the research knows (from conversations with legal aid lawyers) that tenants with vouchers and disabilities were often prioritized over other tenants.
 Or put another way, conditional on the random offer, treatment is prioritized, and this prioritization is partially known.
    ```python
    def fstage(var1, var2, var3, var4, var5, var6, var7, var8, var9):
