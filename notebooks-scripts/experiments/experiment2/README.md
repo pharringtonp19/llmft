@@ -1,6 +1,5 @@
 ### **Purpose**
-Theses simulations hightlight that language models -- relative to feedforward neural networks or linear models -- can exploit
-characteristics which are associated with compliers. 
+These notebooks hightlight that language models can exploit information in the text which is (A) informative about who is a complier and (B) something that the researcher would not have decided to represent as a numerical control variable.
 
 ### **Setp Up**
  1. We generate synthetic observations by drawing features $x = [x_0, x_1, x_2, x_3, x_4]$
