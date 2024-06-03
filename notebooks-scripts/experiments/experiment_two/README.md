@@ -22,4 +22,4 @@ These notebooks highlight that language models can exploit information in the te
 5. We then evaluate a fine-tuned LLM, a feed-forward neural network, a linear model with no controls, and a linear model which does control for $x_4$ contradicting what we said before but we label it the "oracle model" so it's not really a contradiction.
 
 ### **Why Might this Work**
-The researcher knows that tenants who have a disability of a housing voucher are prioritized. 
+Representational Learning
