@@ -123,34 +123,33 @@ class DecoderTrainer:
     gradient_accumulation: int = 8
     threshold: int = 10 
 
-    def process_batch(self, batch, token_type='target_token'):
-        """Process a single batch of data, focusing only on the final token."""
+    def process_batch(self, batch, token_type = 'target_token'):
+        """Compute logits and labels for a batch of data."""
         input_ids = batch['input_ids'].to(self.device)
         attention_mask = batch['attention_mask'].to(self.device)
         logits = self.model(input_ids, attention_mask).logits
-        
+        return input_ids, logits, batch['type_indicator'].to(self.device), batch[token_type].to(self.device)
+
+    def compute_loss(self, input_ids, logits, type_indicator, token_type):
+
         # Focus on the final 'threshold' tokens
         labels = input_ids[:, -self.threshold:].contiguous()
         logits = logits[:, -self.threshold-1:-1, :].contiguous()
-
-        # Compute the loss
+        
+        """Compute the loss for the given logits and labels."""
         criterion_mode = getattr(self.criterion, 'mode', None)
-        if criterion_mode == 'input' and 'type_indicator' in batch:
-            type_indicator = batch['type_indicator'].to(self.device)
+        if criterion_mode == 'input':
             type_indicator = type_indicator.repeat_interleave(self.threshold)
             loss = self.criterion(logits.view(-1, logits.size(-1)), labels.view(-1), type_indicator)
         else:
             loss = self.criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
-        
-        # Extract the precomputed target token from the batch
-        target_token = batch[token_type].to(self.device)
 
         # Extract log probabilities for the second-to-last token
         second_to_last_logits = logits[:, -2, :]
         log_probs = torch.log_softmax(second_to_last_logits, dim=-1)
-        
+
         # Get log probability for the target token
-        log_prob_target = log_probs.gather(1, target_token.unsqueeze(1)).squeeze(1)
+        log_prob_target = log_probs.gather(1, token_type.unsqueeze(1)).squeeze(1)
 
         return loss, log_prob_target
 
@@ -163,7 +162,8 @@ class DecoderTrainer:
         self.optimizer.zero_grad()
 
         for i, batch in enumerate(data_loader):
-            loss, log_prob_target = self.process_batch(batch)
+            input_ids, logits, type_indicator, target_token = self.process_batch(batch, 'target_token')
+            loss, log_prob_target = self.compute_loss(input_ids, logits, type_indicator, target_token)
             neg_log_prob = -log_prob_target.mean().item()
 
             total_samples += len(batch)
@@ -188,17 +188,19 @@ class DecoderTrainer:
 
         return average_loss, average_neg_log_prob
 
-    def evaluate(self, data_loader, token_type='target_token'):
+    def evaluate(self, data_loader, token_type='target_token', return_decoded_text=False):
         self.model.eval()
         total_loss = 0
         total_samples = 0
         total_neg_log_prob = 0
         all_log_probs = []
         all_type_indicator = []
+        decoded_texts = []  # List to store decoded texts
 
         with torch.no_grad():
             for batch in data_loader:
-                loss, log_prob_target = self.process_batch(batch, token_type)
+                input_ids, logits, type_indicator, target_token = self.process_batch(batch, token_type)
+                loss, log_prob_target = self.compute_loss(input_ids, logits, type_indicator, target_token)
                 neg_log_prob = -log_prob_target.mean().item()
 
                 total_samples += len(batch)
@@ -207,14 +209,26 @@ class DecoderTrainer:
 
                 # Collect log probabilities for later concatenation
                 all_log_probs.append(log_prob_target.detach().cpu())
-                all_type_indicator.append(batch['type_indicator'])
+                all_type_indicator.append(type_indicator)
+
+                if return_decoded_text:
+                    # Decode logits to text
+                    generated_ids = self.model.generate(
+                        input_ids=input_ids,
+                        attention_mask=batch['attention_mask'].to(self.device),
+                        max_new_tokens=1)
+                    decoded_batch_texts = self.tokenizer.batch_decode(generated_ids, skip_special_tokens=False)
+                    decoded_texts.extend(decoded_batch_texts)
 
         average_loss = total_loss / total_samples
         average_neg_log_prob = total_neg_log_prob / total_samples
         all_log_probs = torch.cat(all_log_probs)
         all_type_indicator = torch.cat(all_type_indicator)
 
-        return average_loss, average_neg_log_prob, all_log_probs, all_type_indicator
+        if return_decoded_text:
+            return average_loss, average_neg_log_prob, all_log_probs, all_type_indicator, decoded_texts
+        else:
+            return average_loss, average_neg_log_prob, all_log_probs, all_type_indicator
     
     # def batch_generate_text(self, batch):
     #     """Process a single batch of data, focusing only on generating text from the final token."""
