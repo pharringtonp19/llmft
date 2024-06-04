@@ -123,62 +123,53 @@ class DecoderTrainer:
     gradient_accumulation: int = 8
     threshold: int = 10 
 
-    def process_batch(self, batch):
+    def process_batch(self, batch, token_type='target_token'):
         """Process a single batch of data, focusing only on the final token."""
         input_ids = batch['input_ids'].to(self.device)
         attention_mask = batch['attention_mask'].to(self.device)
         logits = self.model(input_ids, attention_mask).logits
+        
+        # Focus on the final 'threshold' tokens
         labels = input_ids[:, -self.threshold:].contiguous()
         logits = logits[:, -self.threshold-1:-1, :].contiguous()
-        criterion_mode = getattr(self.criterion, 'mode', None)  # Defaulting to None or another appropriate default
+
+        # Compute the loss
+        criterion_mode = getattr(self.criterion, 'mode', None)
         if criterion_mode == 'input' and 'type_indicator' in batch:
-            # Ensure type_indicator is adjusted to match the size of logits/labels if it includes multiple predictions per example
-            # Assuming type_indicator needs to be repeated for each token in the threshold window
             type_indicator = batch['type_indicator'].to(self.device)
-            
-            # Repeat type_indicator to match the number of predictions (this depends on how your model and criterion are designed)
             type_indicator = type_indicator.repeat_interleave(self.threshold)
-            
-            # Compute loss with type_indicator
             loss = self.criterion(logits.view(-1, logits.size(-1)), labels.view(-1), type_indicator)
         else:
-            # Compute loss without type_indicator
             loss = self.criterion(logits.view(-1, logits.size(-1)), labels.view(-1))
         
-        return loss
-    
+        # Extract the precomputed target token from the batch
+        target_token = batch[token_type].to(self.device)
 
-    def batch_generate_text(self, batch):
-        """Process a single batch of data, focusing only on generating text from the final token."""
-        input_ids = batch['input_ids'].to(self.device)
-        attention_mask = batch['attention_mask'].to(self.device)
+        # Extract log probabilities for the second-to-last token
+        second_to_last_logits = logits[:, -2, :]
+        log_probs = torch.log_softmax(second_to_last_logits, dim=-1)
+        
+        # Get log probability for the target token
+        log_prob_target = log_probs.gather(1, target_token.unsqueeze(1)).squeeze(1)
 
-        # Get logits from the model
-        logits = self.model(input_ids, attention_mask).logits
-
-        # Get the last logits for generating text (last token predictions)
-        last_logits = logits[:, self.threshold, :]
-
-        # Convert logits to predicted token IDs using argmax
-        predicted_token_ids = torch.argmax(last_logits, dim=-1)
-
-        # Decode the predicted token IDs to text
-        decoded_texts = self.tokenizer.batch_decode(predicted_token_ids, skip_special_tokens=True)
-
-        # You can return the decoded texts directly or further process them as needed
-        return decoded_texts, batch['type_indicator']
+        return loss, log_prob_target
 
 
     def train(self, data_loader):
         self.model.train()
         total_loss = 0
         total_samples = 0
+        total_neg_log_prob = 0
         self.optimizer.zero_grad()
 
         for i, batch in enumerate(data_loader):
-            loss = self.process_batch(batch)
+            loss, log_prob_target = self.process_batch(batch)
+            neg_log_prob = -log_prob_target.mean().item()
+
             total_samples += len(batch)
             total_loss += loss.item() * len(batch)
+            total_neg_log_prob += neg_log_prob * len(batch)
+
             loss = loss / self.gradient_accumulation  # Normalizing loss for accumulation steps
             loss.backward()
 
@@ -188,73 +179,113 @@ class DecoderTrainer:
                 self.optimizer.zero_grad()
                 if self.verbose:
                     print(f"Batch {i+1} Loss: {loss.item() * self.gradient_accumulation}")
+                    print(f"Batch {i+1} Negative Log Probability: {neg_log_prob}")
+
                 torch.cuda.empty_cache()
 
-        return total_loss / total_samples
+        average_loss = total_loss / total_samples
+        average_neg_log_prob = total_neg_log_prob / total_samples
 
-    def evaluate(self, data_loader):
+        return average_loss, average_neg_log_prob
+
+    def evaluate(self, data_loader, token_type='target_token'):
         self.model.eval()
         total_loss = 0
         total_samples = 0
+        total_neg_log_prob = 0
+        all_log_probs = []
+        all_type_indicator = []
 
         with torch.no_grad():
             for batch in data_loader:
-                loss = self.process_batch(batch).item()
+                loss, log_prob_target = self.process_batch(batch, token_type)
+                neg_log_prob = -log_prob_target.mean().item()
+
                 total_samples += len(batch)
-                total_loss += loss * len(batch)
+                total_loss += loss.item() * len(batch)
+                total_neg_log_prob += neg_log_prob * len(batch)
 
-        return total_loss / total_samples
+                # Collect log probabilities for later concatenation
+                all_log_probs.append(log_prob_target.detach().cpu())
+                all_type_indicator.append(batch['type_indicator'])
+
+        average_loss = total_loss / total_samples
+        average_neg_log_prob = total_neg_log_prob / total_samples
+        all_log_probs = torch.cat(all_log_probs)
+        all_type_indicator = torch.cat(all_type_indicator)
+
+        return average_loss, average_neg_log_prob, all_log_probs, all_type_indicator
     
-    def batch_generate_text(self, batch):
-        """Process a single batch of data, focusing only on generating text from the final token."""
-        input_ids = batch['input_ids'].to(self.device)
-        attention_mask = batch['attention_mask'].to(self.device)
+    # def batch_generate_text(self, batch):
+    #     """Process a single batch of data, focusing only on generating text from the final token."""
+    #     input_ids = batch['input_ids'].to(self.device)
+    #     attention_mask = batch['attention_mask'].to(self.device)
 
-        # Get logits from the model
-        logits = self.model(input_ids, attention_mask).logits
+    #     # Get logits from the model
+    #     logits = self.model(input_ids, attention_mask).logits
 
-        # Get the last logits for generating text (last token predictions)
-        last_logits = logits[:, -self.threshold:, :]
+    #     # Get the last logits for generating text (last token predictions)
+    #     last_logits = logits[:, -self.threshold:, :]
 
-        # Convert logits to predicted token IDs using argmax
-        predicted_token_ids = torch.argmax(last_logits, dim=-1)
+    #     # Convert logits to predicted token IDs using argmax
+    #     predicted_token_ids = torch.argmax(last_logits, dim=-1)
 
-        # Decode the predicted token IDs to text
-        decoded_texts = self.tokenizer.batch_decode(predicted_token_ids, skip_special_tokens=True)
+    #     # Decode the predicted token IDs to text
+    #     decoded_texts = self.tokenizer.batch_decode(predicted_token_ids, skip_special_tokens=True)
 
-        # You can return the decoded texts directly or further process them as needed
-        return decoded_texts, batch['type_indicator']
+    #     # You can return the decoded texts directly or further process them as needed
+    #     return decoded_texts, batch['type_indicator']
     
-    def compute_recall(self, data_loader):
-        self.model.eval()
-        all_yes_status = []
-        all_type_indicators = []
+    # def batch_generate_text(self, batch):
+    #     """Process a single batch of data, focusing only on generating text from the final token."""
+    #     input_ids = batch['input_ids'].to(self.device)
+    #     attention_mask = batch['attention_mask'].to(self.device)
 
-        with torch.no_grad():
-            for batch in data_loader:
-                sentences, type_indicators = self.batch_generate_text(batch)
-                batch_yes_status = ["Yes" in sentence for sentence in sentences]
-                all_yes_status.extend(batch_yes_status)
-                all_type_indicators.extend(type_indicators.cpu().numpy())  # Assuming type_indicator is a tensor
+    #     # Get logits from the model
+    #     logits = self.model(input_ids, attention_mask).logits
 
-        # Calculate metrics for each type indicator
-        type_0_no_fraction = self.calculate_fraction(all_yes_status, all_type_indicators, target_type=0, search_for="No")
-        type_1_yes_fraction = self.calculate_fraction(all_yes_status, all_type_indicators, target_type=1, search_for="Yes")
+    #     # Get the last logits for generating text (last token predictions)
+    #     last_logits = logits[:, self.threshold, :]
 
-        return [type_0_no_fraction, type_1_yes_fraction]
+    #     # Convert logits to predicted token IDs using argmax
+    #     predicted_token_ids = torch.argmax(last_logits, dim=-1)
+
+    #     # Decode the predicted token IDs to text
+    #     decoded_texts = self.tokenizer.batch_decode(predicted_token_ids, skip_special_tokens=True)
+
+    #     # You can return the decoded texts directly or further process them as needed
+    #     return decoded_texts, batch['type_indicator']
     
-    @staticmethod
-    def calculate_fraction(yes_status, type_indicators, target_type, search_for):
-        indices = [i for i, x in enumerate(type_indicators) if x == target_type]
-        if indices:
-            if search_for == "Yes":
-                relevant_status = [yes_status[i] for i in indices]
-            else:  # Assume "No"
-                relevant_status = [not yes_status[i] for i in indices]
-            fraction = sum(relevant_status) / len(relevant_status)
-        else:
-            fraction = None  # No samples of this type_indicator
-        return fraction
+    # def compute_recall(self, data_loader):
+    #     self.model.eval()
+    #     all_yes_status = []
+    #     all_type_indicators = []
+
+    #     with torch.no_grad():
+    #         for batch in data_loader:
+    #             sentences, type_indicators = self.batch_generate_text(batch)
+    #             batch_yes_status = ["Yes" in sentence for sentence in sentences]
+    #             all_yes_status.extend(batch_yes_status)
+    #             all_type_indicators.extend(type_indicators.cpu().numpy())  # Assuming type_indicator is a tensor
+
+    #     # Calculate metrics for each type indicator
+    #     type_0_no_fraction = self.calculate_fraction(all_yes_status, all_type_indicators, target_type=0, search_for="No")
+    #     type_1_yes_fraction = self.calculate_fraction(all_yes_status, all_type_indicators, target_type=1, search_for="Yes")
+
+    #     return [type_0_no_fraction, type_1_yes_fraction]
+    
+    # @staticmethod
+    # def calculate_fraction(yes_status, type_indicators, target_type, search_for):
+    #     indices = [i for i, x in enumerate(type_indicators) if x == target_type]
+    #     if indices:
+    #         if search_for == "Yes":
+    #             relevant_status = [yes_status[i] for i in indices]
+    #         else:  # Assume "No"
+    #             relevant_status = [not yes_status[i] for i in indices]
+    #         fraction = sum(relevant_status) / len(relevant_status)
+    #     else:
+    #         fraction = None  # No samples of this type_indicator
+    #     return fraction
 
 
 
