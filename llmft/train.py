@@ -120,7 +120,7 @@ class DecoderTrainer:
     criterion: torch.nn.Module
     device: torch.device
     verbose: bool = True   
-    gradient_accumulation: int = 8
+    gradient_accumulation: int = 4
     threshold: int = 10 
 
     def process_batch(self, batch, token_type = 'target_token'):
@@ -196,6 +196,8 @@ class DecoderTrainer:
             all_log_probs = []
             all_type_indicator = []
             all_target = []
+            fstage_values = []
+            outcome_values = []
             decoded_texts = []  # List to store decoded texts
 
             with torch.no_grad():
@@ -212,6 +214,8 @@ class DecoderTrainer:
                     all_log_probs.append(log_prob_target.detach().cpu())
                     all_type_indicator.append(type_indicator)
                     all_target.extend(self.tokenizer.batch_decode(batch['target_token'], skip_special_tokens=False))  # Append decoded target_token to all_target
+                    fstage_values.extend(batch['fstage'])
+                    outcome_values.extend(batch['outcome'])
 
                     if return_decoded_text:
                         # Decode logits to text
@@ -236,9 +240,9 @@ class DecoderTrainer:
             all_type_indicator = torch.cat(all_type_indicator)
 
             if return_decoded_text:
-                return average_loss, average_neg_log_prob, all_log_probs, all_type_indicator, all_target, decoded_texts
+                return average_loss, average_neg_log_prob, all_log_probs, all_type_indicator, all_target, fstage_values, outcome_values, decoded_texts
             else:
-                return average_loss, average_neg_log_prob, all_log_probs, all_type_indicator, all_target
+                return average_loss, average_neg_log_prob, all_log_probs, all_type_indicator, all_target, fstage_values, outcome_values
     
     # def batch_generate_text(self, batch):
     #     """Process a single batch of data, focusing only on generating text from the final token."""
