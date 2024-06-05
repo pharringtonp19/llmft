@@ -2,7 +2,7 @@ import torch
 import numpy as np 
 from dataclasses import dataclass, field
 from transformers import PreTrainedTokenizerBase
-
+from torch.cuda.amp import autocast
 
 def no_op(*args, **kwargs):
     pass
@@ -127,7 +127,8 @@ class DecoderTrainer:
         """Compute logits and labels for a batch of data."""
         input_ids = batch['input_ids'].to(self.device)
         attention_mask = batch['attention_mask'].to(self.device)
-        logits = self.model(input_ids, attention_mask).logits
+        with autocast(dtype=torch.bfloat16):
+            logits = self.model(input_ids, attention_mask).logits
         return input_ids, logits, batch['type_indicator'].to(self.device), batch[token_type].to(self.device)
 
     def compute_loss(self, input_ids, logits, type_indicator, token_type):
@@ -162,9 +163,10 @@ class DecoderTrainer:
         self.optimizer.zero_grad()
 
         for i, batch in enumerate(data_loader):
-            input_ids, logits, type_indicator, target_token = self.process_batch(batch, 'target_token')
-            loss, log_prob_target = self.compute_loss(input_ids, logits, type_indicator, target_token)
-            neg_log_prob = -log_prob_target.mean().item()
+            with autocast(dtype=torch.bfloat16):
+                input_ids, logits, type_indicator, target_token = self.process_batch(batch, 'target_token')
+                loss, log_prob_target = self.compute_loss(input_ids, logits, type_indicator, target_token)
+                neg_log_prob = -log_prob_target.mean().item()
 
             total_samples += len(batch)
             total_loss += loss.item() * len(batch)
