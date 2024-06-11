@@ -3,6 +3,8 @@ import numpy as np
 from dataclasses import dataclass, field
 from transformers import PreTrainedTokenizerBase
 from torch.cuda.amp import autocast
+import torch.nn.utils as utils
+
 
 def no_op(*args, **kwargs):
     pass
@@ -96,6 +98,7 @@ class EncoderTrainer:
         if train:
             self.optimizer.zero_grad()
             loss.backward()
+            utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
             self.optimizer.step()
             self.scheduler.step()
         predictions = torch.argmax(logits, dim=1) if train else None
