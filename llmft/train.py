@@ -57,6 +57,31 @@ class EncoderTrainer:
     device: torch.device
     verbose: bool = True  # Default to True, can be set to False when creating an instance
 
+    def process_batch(self, batch, train=True):
+        """Process a single batch of data."""
+        input_ids, attention_mask, labels = (batch['input_ids'].to(self.device), 
+                                             batch['attention_mask'].to(self.device), 
+                                             batch['labels'].to(self.device))
+        logits = self.model(input_ids, attention_mask).logits
+        
+        criterion_mode = getattr(self.criterion, 'mode', None)                             # getattr(object, attribute_name, default_value)
+        
+        if criterion_mode == 'input' and 'type_indicator' in batch:
+            type_indicator = batch['type_indicator'].to(self.device)
+            loss = self.criterion(logits, labels, type_indicator)
+        else:
+            loss = self.criterion(logits, labels)
+
+        if train:
+            self.optimizer.zero_grad()
+            loss.backward()
+            utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
+            self.optimizer.step()
+            self.scheduler.step()
+        
+        predictions = torch.argmax(logits, dim=1) if train else None
+        return loss, predictions, labels
+
     def train(self, data_loader):
         """Train the model for one epoch."""
         self.model.train()
@@ -83,26 +108,7 @@ class EncoderTrainer:
         average_loss = total_loss / len(data_loader)
         return average_loss
 
-    def process_batch(self, batch, train=True):
-        """Process a single batch of data."""
-        input_ids, attention_mask, labels = (batch['input_ids'].to(self.device), 
-                                             batch['attention_mask'].to(self.device), 
-                                             batch['labels'].to(self.device))
-        logits = self.model(input_ids, attention_mask).logits
-        criterion_mode = getattr(self.criterion, 'mode', None)  # Defaulting to None or another appropriate default
-        if criterion_mode == 'input' and 'type_indicator' in batch:
-            type_indicator = batch['type_indicator'].to(self.device)
-            loss = self.criterion(logits, labels, type_indicator)
-        else:
-            loss = self.criterion(logits, labels)
-        if train:
-            self.optimizer.zero_grad()
-            loss.backward()
-            utils.clip_grad_norm_(self.model.parameters(), max_norm=1.0)
-            self.optimizer.step()
-            self.scheduler.step()
-        predictions = torch.argmax(logits, dim=1) if train else None
-        return loss, predictions, labels
+
 
     def finalize_epoch(self, total_loss, all_predictions, all_labels, num_batches):
         """Finalize epoch, calculate metrics and average loss."""
