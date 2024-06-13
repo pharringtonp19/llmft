@@ -51,11 +51,10 @@ class EarlyStopping:
 class EncoderTrainer:
     model: torch.nn.Module
     optimizer: torch.optim.Optimizer
-    scheduler: torch.optim.lr_scheduler 
-    metric: any  # Define the type based on your implementation
-    criterion:torch.nn.Module
+    scheduler: torch.optim.lr_scheduler._LRScheduler
+    criterion: torch.nn.Module
     device: torch.device
-    verbose: bool = True  # Default to True, can be set to False when creating an instance
+    metric: any  # Define the type based on your implementation
 
     def process_batch(self, batch, train=True):
         """Process a single batch of data."""
@@ -64,13 +63,7 @@ class EncoderTrainer:
                                              batch['labels'].to(self.device))
         logits = self.model(input_ids, attention_mask).logits
         
-        criterion_mode = getattr(self.criterion, 'mode', None)                             # getattr(object, attribute_name, default_value)
-        
-        if criterion_mode == 'input' and 'type_indicator' in batch:
-            type_indicator = batch['type_indicator'].to(self.device)
-            loss = self.criterion(logits, labels, type_indicator)
-        else:
-            loss = self.criterion(logits, labels)
+        loss = self.criterion(logits, labels)
 
         if train:
             self.optimizer.zero_grad()
@@ -79,7 +72,7 @@ class EncoderTrainer:
             self.optimizer.step()
             self.scheduler.step()
         
-        predictions = torch.argmax(logits, dim=1) if train else None
+        predictions = torch.argmax(logits, dim=1) 
         return loss, predictions, labels
 
     def train(self, data_loader):
@@ -101,24 +94,25 @@ class EncoderTrainer:
         """Evaluate the model on a validation set."""
         self.model.eval()
         total_loss = 0
+        all_predictions = []
+        all_labels = []
+        
         with torch.no_grad():
             for batch in data_loader:
-                loss, _, _ = self.process_batch(batch, train=False)
+                loss, predictions, labels = self.process_batch(batch, train=False)
                 total_loss += loss.item()
-        average_loss = total_loss / len(data_loader)
-        return average_loss
-
-
+                all_predictions.append(predictions)
+                all_labels.append(labels)
+                
+        return self.finalize_epoch(total_loss, all_predictions, all_labels, len(data_loader))
 
     def finalize_epoch(self, total_loss, all_predictions, all_labels, num_batches):
         """Finalize epoch, calculate metrics and average loss."""
-        all_predictions = torch.cat(all_predictions)
+        all_predictions = torch.cat(all_predictions) 
         all_labels = torch.cat(all_labels)
         metric_output = self.metric(all_predictions, all_labels)
         average_loss = total_loss / num_batches
-        if self.verbose:
-            print(f'Epoch finished. Average Loss: {average_loss:.4f}, Metric: {metric_output}')
-        return average_loss, metric_output, self.scheduler.get_last_lr()[0]  
+        return average_loss, all_predictions, all_labels, metric_output, self.scheduler.get_last_lr()[0]
 
 @dataclass
 class DecoderTrainer:
