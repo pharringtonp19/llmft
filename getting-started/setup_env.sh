@@ -18,7 +18,7 @@ pip install transformers datasets accelerate peft bitsandbytes ipywidgets evalua
 pip install matplotlib scikit-learn pytest pre-commit torchtune papermill
 pip install openai tiktoken trl ipykernel anthropic PyPDF2 seaborn
 pip install git+https://github.com/pharringtonp19/trics.git
-pip install -U "jax[cuda12_pip]" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
+pip install -U "jax[cuda12]==0.4.27" -f https://storage.googleapis.com/jax-releases/jax_cuda_releases.html
 pip install flax optax 
 pip install wheel
 pip install flash-attn
